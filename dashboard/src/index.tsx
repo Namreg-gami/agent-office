@@ -1,3 +1,4 @@
+import "./injectStyles";
 import React from "react";
 import App from "./App";
 
