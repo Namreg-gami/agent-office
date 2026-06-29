@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { ProfileInfo, KanbanBoard, KanbanTask, AgentState, AgentStatus } from "./types";
-import { fetchProfiles, fetchKanbanBoard } from "./api";
+import { fetchOfficeState, officeStateToAgentStates } from "./api";
 import { deriveVisualState, getWorkerPlacement, selectPrimaryTask } from "./officeLayout";
 import WorkerAvatar from "./components/WorkerAvatar";
 import AgentDrawer from "./components/AgentDrawer";
@@ -169,43 +169,14 @@ export default function App(): React.ReactElement {
 
   const fetchData = useCallback(async () => {
     try {
-      const [profileResult, boardResult] = await Promise.allSettled([
-        fetchProfiles(),
-        fetchKanbanBoard(),
-      ]);
+      const officeState = await fetchOfficeState();
 
-      if (profileResult.status === "rejected") {
-        const message = profileResult.reason instanceof Error
-          ? profileResult.reason.message
-          : "Profiles API unavailable";
-        showDemoOffice(`Profiles API unavailable (${message})`);
+      if (!officeState?.workers || !Array.isArray(officeState.workers)) {
+        showDemoOffice("Invalid office state response");
         return;
       }
 
-      const profileResp = profileResult.value;
-      if (!profileResp?.profiles) {
-        showDemoOffice("Invalid profile response");
-        return;
-      }
-
-      if (boardResult.status === "rejected" || !boardResult.value?.columns) {
-        const message = boardResult.status === "rejected" && boardResult.reason instanceof Error
-          ? boardResult.reason.message
-          : "Kanban board data unavailable";
-        const fallbackStates: AgentState[] = profileResp.profiles.map((p) => ({
-          profile: p,
-          status: "idle" as AgentStatus,
-          taskCount: 0,
-          blockedCount: 0,
-        }));
-        setAgents(fallbackStates);
-        setError(null);
-        setDegraded(true);
-        setDegradedMsg(`${message}. Showing real profiles without task lifecycle status.`);
-        return;
-      }
-
-      const agentStates = buildAgentStates(profileResp.profiles, boardResult.value);
+      const agentStates = officeStateToAgentStates(officeState);
       setAgents(agentStates);
       setError(null);
       setDegraded(false);
@@ -213,7 +184,7 @@ export default function App(): React.ReactElement {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Unknown fetch error";
-      showDemoOffice(`Unexpected API failure (${message})`);
+      showDemoOffice(`Office API unavailable (${message})`);
     } finally {
       setLoading(false);
     }

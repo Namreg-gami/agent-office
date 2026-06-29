@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      "/api/office": {
+        target: "http://127.0.0.1:8800",
+        changeOrigin: true,
+      },
       "/api": "http://127.0.0.1:9119",
     },
   },
