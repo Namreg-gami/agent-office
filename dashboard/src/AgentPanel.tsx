@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { AgentState, TaskDetail, Run, Event, Comment } from "./types";
+import type { AgentState, TaskDetail, Run, Event } from "./types";
 
 interface Props {
   agent: AgentState;
