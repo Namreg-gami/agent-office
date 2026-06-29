@@ -1,100 +1,145 @@
-// app/src/officeLayout.ts — determine worker position in the office scene
+// app/src/officeLayout.ts — Kanban lifecycle → office visual state/position
 
-import type { AgentState, AgentStatus } from "./types";
+import type { AgentState, AgentStatus, KanbanTask } from "./types";
 
-export interface OfficePosition {
-  x: number;   // percentage from left
-  y: number;   // percentage from top
-  zone: string; // zone label
+export interface OfficePoint {
+  x: number; // percentage from left
+  y: number; // percentage from top
 }
 
-// Zone definitions as CSS-able areas
-export const ZONES = {
-  desks: { label: "Desks", xRange: [5, 55], yRange: [10, 50] },
-  review: { label: "Review / Test", xRange: [60, 80], yRange: [10, 40] },
-  lounge: { label: "Coffee / Lounge", xRange: [70, 95], yRange: [55, 90] },
-  problem: { label: "Blocked / Help", xRange: [5, 30], yRange: [60, 90] },
+export interface WorkerPlacement {
+  point: OfficePoint;
+  zone: "desk" | "lounge" | "review" | "help";
+  deskId?: string;
+  label: string;
+}
+
+type Role = "frontend" | "backend" | "reviewer" | "default";
+
+export const OFFICE_POINTS = {
+  desks: {
+    frontend: { x: 22, y: 34 },
+    backend: { x: 43, y: 34 },
+    reviewer: { x: 64, y: 31 },
+    default: { x: 31, y: 34 },
+  },
+  lounge: {
+    frontend: { x: 73, y: 73 },
+    backend: { x: 82, y: 74 },
+    reviewer: { x: 78, y: 84 },
+    default: { x: 78, y: 78 },
+  },
+  review: { x: 72, y: 31 },
+  help: { x: 28, y: 76 },
 } as const;
 
-// Deterministic but scattered positions per profile name
-function nameToOffset(name: string): [number, number] {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) & 0xffff;
-  }
-  // Return offsets in range [0, 1)
-  return [(hash % 100) / 100, ((hash >> 8) % 100) / 100];
+const STATUS_PRECEDENCE = [
+  "blocked",
+  "running",
+  "in_progress",
+  "review",
+  "pending_review",
+  "ready",
+  "todo",
+  "triage",
+  "done",
+  "completed",
+] as const;
+
+function roleForProfile(profileName: string): Role {
+  const lower = profileName.toLowerCase();
+  if (lower.includes("front")) return "frontend";
+  if (lower.includes("back")) return "backend";
+  if (lower.includes("review") || lower.includes("test")) return "reviewer";
+  return "default";
 }
 
-export function getWorkerPosition(
-  agent: AgentState,
-  index: number,
-  totalInZone: number
-): OfficePosition {
+export function normalizeTaskStatus(status: string | undefined): string {
+  return (status || "").trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+export function selectPrimaryTask(tasks: KanbanTask[]): KanbanTask | undefined {
+  if (tasks.length === 0) return undefined;
+  const sorted = [...tasks].sort((a, b) => {
+    const aStatus = normalizeTaskStatus(a.status);
+    const bStatus = normalizeTaskStatus(b.status);
+    const aIdx = STATUS_PRECEDENCE.indexOf(aStatus as (typeof STATUS_PRECEDENCE)[number]);
+    const bIdx = STATUS_PRECEDENCE.indexOf(bStatus as (typeof STATUS_PRECEDENCE)[number]);
+    const aScore = aIdx === -1 ? 999 : aIdx;
+    const bScore = bIdx === -1 ? 999 : bIdx;
+    if (aScore !== bScore) return aScore - bScore;
+    return (b.priority || 0) - (a.priority || 0);
+  });
+  return sorted[0];
+}
+
+export function deriveVisualState(tasks: KanbanTask[], profileName: string): AgentStatus {
+  const task = selectPrimaryTask(tasks);
+  if (!task) return "idle";
+
+  const status = normalizeTaskStatus(task.status);
+  const role = roleForProfile(profileName);
+
+  if (status === "blocked") return "blocked";
+  if (status === "running" || status === "in_progress") return "working_at_desk";
+  if (status === "review" || status === "pending_review" || status === "approved") {
+    return role === "reviewer" ? "reviewing" : "walking_to_review";
+  }
+  if (status === "todo" || status === "ready" || status === "triage") return "walking_to_desk";
+  if (status === "done" || status === "completed") return "walking_to_lounge";
+
+  return "idle";
+}
+
+function basePointForAgent(agent: AgentState): WorkerPlacement {
+  const role = roleForProfile(agent.profile.name);
+
   switch (agent.status) {
-    case "working": {
-      const [ox, oy] = nameToOffset(agent.profile.name);
+    case "walking_to_desk":
+    case "working_at_desk":
       return {
-        x: ZONES.desks.xRange[0] + ox * (ZONES.desks.xRange[1] - ZONES.desks.xRange[0]),
-        y: ZONES.desks.yRange[0] + oy * (ZONES.desks.yRange[1] - ZONES.desks.yRange[0]),
-        zone: "Desks",
+        point: OFFICE_POINTS.desks[role],
+        zone: "desk",
+        deskId: `desk_${role}`,
+        label: `${role} desk`,
       };
-    }
-    case "reviewing": {
-      const [ox, oy] = nameToOffset(agent.profile.name);
-      return {
-        x: ZONES.review.xRange[0] + ox * (ZONES.review.xRange[1] - ZONES.review.xRange[0]),
-        y: ZONES.review.yRange[0] + oy * (ZONES.review.yRange[1] - ZONES.review.yRange[0]),
-        zone: "Review / Test",
-      };
-    }
-    case "blocked": {
-      const step = totalInZone > 1 ? (ZONES.problem.xRange[1] - ZONES.problem.xRange[0]) / (totalInZone - 1) : 0;
-      return {
-        x: ZONES.problem.xRange[0] + (totalInZone > 1 ? index * step : 15),
-        y: ZONES.problem.yRange[0] + (ZONES.problem.yRange[1] - ZONES.problem.yRange[0]) / 2,
-        zone: "Blocked / Help",
-      };
-    }
-    case "idle": {
-      const step = totalInZone > 1 ? (ZONES.lounge.xRange[1] - ZONES.lounge.xRange[0]) / (totalInZone - 1) : 0;
-      return {
-        x: ZONES.lounge.xRange[0] + (totalInZone > 1 ? index * step : 75),
-        y: ZONES.lounge.yRange[0] + (ZONES.lounge.yRange[1] - ZONES.lounge.yRange[0]) / 2,
-        zone: "Coffee / Lounge",
-      };
-    }
+    case "walking_to_review":
+    case "reviewing":
+      return { point: OFFICE_POINTS.review, zone: "review", label: "Review / Test" };
+    case "blocked":
+      return { point: OFFICE_POINTS.help, zone: "help", label: "Blocked / Help" };
+    case "walking_to_lounge":
+    case "idle":
     default:
-      return { x: 50, y: 80, zone: "Unknown" };
+      return {
+        point: OFFICE_POINTS.lounge[role],
+        zone: "lounge",
+        label: "Coffee / Lounge",
+      };
   }
 }
 
-export function deriveStatus(
-  tasks: import("./types").KanbanTask[],
-  profileName: string
-): AgentStatus {
-  if (tasks.length === 0) return "idle";
+export function getWorkerPlacement(agent: AgentState, allAgents: AgentState[]): WorkerPlacement {
+  const base = basePointForAgent(agent);
+  const sameZone = allAgents.filter((candidate) => {
+    const other = basePointForAgent(candidate);
+    return other.zone === base.zone && other.label === base.label;
+  });
+  const index = sameZone.findIndex((candidate) => candidate.profile.name === agent.profile.name);
+  const offset = index <= 0 ? 0 : index * 4;
 
-  // Special case: profiles named "reviewer" or containing "review" that have tasks in review column
-  const hasReviewTask = tasks.some(
-    (t) =>
-      t.status === "review" ||
-      t.status === "pending_review" ||
-      t.status === "approved"
-  );
-  if (hasReviewTask || profileName.toLowerCase().includes("review")) {
-    return "reviewing";
-  }
-
-  const running = tasks.filter((t) => t.status === "running");
-  if (running.length > 0) return "working";
-
-  const blocked = tasks.filter((t) => t.status === "blocked");
-  if (blocked.length > 0) return "blocked";
-
-  const hasActive = tasks.some(
-    (t) =>
-      t.status === "ready" || t.status === "triage" || t.status === "todo"
-  );
-  return hasActive ? "working" : "idle";
+  return {
+    ...base,
+    point: {
+      x: Math.min(94, base.point.x + offset),
+      y: Math.min(90, base.point.y + (index % 2 === 0 ? 0 : 4)),
+    },
+  };
 }
+
+export function isMovingState(status: AgentStatus): boolean {
+  return status === "walking_to_desk" || status === "walking_to_review" || status === "walking_to_lounge";
+}
+
+// Backward-compatible name used by older code/tests.
+export const deriveStatus = deriveVisualState;

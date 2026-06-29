@@ -116,8 +116,15 @@ export interface Run {
   error?: string;
 }
 
-// UI domain types
-export type AgentStatus = "idle" | "working" | "blocked" | "reviewing";
+// UI domain types — visual state of a worker inside the office map.
+export type AgentStatus =
+  | "idle"
+  | "walking_to_desk"
+  | "working_at_desk"
+  | "walking_to_review"
+  | "reviewing"
+  | "walking_to_lounge"
+  | "blocked";
 
 export interface AgentState {
   profile: ProfileInfo;

@@ -1,10 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { ProfileInfo, KanbanBoard, KanbanTask, AgentState, AgentStatus } from "./types";
 import { fetchProfiles, fetchKanbanBoard } from "./api";
-import { deriveStatus } from "./officeLayout";
-import ReviewDesk from "./components/ReviewDesk";
-import ProblemZone from "./components/ProblemZone";
-import CoffeeMachine from "./components/CoffeeMachine";
+import { deriveVisualState, getWorkerPlacement, selectPrimaryTask } from "./officeLayout";
 import WorkerAvatar from "./components/WorkerAvatar";
 import AgentDrawer from "./components/AgentDrawer";
 
@@ -30,11 +27,55 @@ const DEMO_PROFILES: ProfileInfo[] = [
   demoProfile("reviewer", "Demo fallback: reviewer/tester"),
 ];
 
-function buildDemoAgents(): AgentState[] {
+function demoTask(id: string, title: string, status: string, assignee: string): KanbanTask {
+  return {
+    id,
+    title,
+    status,
+    assignee,
+    body: "Demo task used only when Hermes API is unavailable.",
+    priority: 30,
+    latest_summary: `Demo lifecycle state: ${status}`,
+    link_counts: { parents: 0, children: 0 },
+    comment_count: 0,
+    age: {},
+  };
+}
+
+function agentFromDemo(profile: ProfileInfo, task?: KanbanTask): AgentState {
+  const tasks = task ? [task] : [];
+  return {
+    profile,
+    status: deriveVisualState(tasks, profile.name),
+    currentTask: task,
+    taskCount: tasks.length,
+    blockedCount: task?.status === "blocked" ? 1 : 0,
+  };
+}
+
+function buildDemoAgents(phase: number): AgentState[] {
+  const step = phase % 5;
+  const frontendStatus = ["ready", "running", "running", "completed", "ready"][step];
+  const backendStatus = [undefined, undefined, "blocked", undefined, "ready"][step];
+  const reviewerStatus = ["review", "review", "pending_review", undefined, "review"][step];
+
   return [
-    { profile: DEMO_PROFILES[0], status: "working", taskCount: 1, blockedCount: 0 },
-    { profile: DEMO_PROFILES[1], status: "idle", taskCount: 0, blockedCount: 0 },
-    { profile: DEMO_PROFILES[2], status: "reviewing", taskCount: 1, blockedCount: 0 },
+    agentFromDemo(
+      DEMO_PROFILES[0],
+      demoTask("demo_frontend", "Build animated office map", frontendStatus, "frontend")
+    ),
+    agentFromDemo(
+      DEMO_PROFILES[1],
+      backendStatus
+        ? demoTask("demo_backend", "Provide office API bridge", backendStatus, "backend")
+        : undefined
+    ),
+    agentFromDemo(
+      DEMO_PROFILES[2],
+      reviewerStatus
+        ? demoTask("demo_reviewer", "Review worker animation lifecycle", reviewerStatus, "reviewer")
+        : undefined
+    ),
   ];
 }
 
@@ -53,13 +94,12 @@ function buildAgentStates(
 
   return profiles.map((p) => {
     const tasks = tasksByAssignee[p.name] || [];
-    const status = deriveStatus(tasks, p.name);
-    const running = tasks.filter((t) => t.status === "running");
+    const status = deriveVisualState(tasks, p.name);
     const blocked = tasks.filter((t) => t.status === "blocked");
     return {
       profile: p,
       status,
-      currentTask: running[0] || tasks[0],
+      currentTask: selectPrimaryTask(tasks),
       taskCount: tasks.length,
       blockedCount: blocked.length,
     };
@@ -106,6 +146,10 @@ function DegradedBanner({ message }: { message: string }): React.ReactElement {
   );
 }
 
+function stateText(status: AgentStatus): string {
+  return status.replaceAll("_", " ");
+}
+
 export default function App(): React.ReactElement {
   const [agents, setAgents] = useState<AgentState[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,6 +157,15 @@ export default function App(): React.ReactElement {
   const [degraded, setDegraded] = useState(false);
   const [degradedMsg, setDegradedMsg] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<AgentState | null>(null);
+  const demoPhaseRef = useRef(0);
+
+  const showDemoOffice = useCallback((message: string) => {
+    const phase = demoPhaseRef.current++;
+    setAgents(buildDemoAgents(phase));
+    setError(null);
+    setDegraded(true);
+    setDegradedMsg(`${message}. Showing clearly marked demo office with lifecycle movement states.`);
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -125,19 +178,13 @@ export default function App(): React.ReactElement {
         const message = profileResult.reason instanceof Error
           ? profileResult.reason.message
           : "Profiles API unavailable";
-        setAgents(buildDemoAgents());
-        setError(null);
-        setDegraded(true);
-        setDegradedMsg(`Profiles API unavailable (${message}). Showing clearly marked demo office so the visual layout remains testable.`);
+        showDemoOffice(`Profiles API unavailable (${message})`);
         return;
       }
 
       const profileResp = profileResult.value;
       if (!profileResp?.profiles) {
-        setAgents(buildDemoAgents());
-        setError(null);
-        setDegraded(true);
-        setDegradedMsg("Invalid profile response. Showing clearly marked demo office so the visual layout remains testable.");
+        showDemoOffice("Invalid profile response");
         return;
       }
 
@@ -154,7 +201,7 @@ export default function App(): React.ReactElement {
         setAgents(fallbackStates);
         setError(null);
         setDegraded(true);
-        setDegradedMsg(`${message}. Showing real profiles without task status.`);
+        setDegradedMsg(`${message}. Showing real profiles without task lifecycle status.`);
         return;
       }
 
@@ -166,14 +213,11 @@ export default function App(): React.ReactElement {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Unknown fetch error";
-      setAgents(buildDemoAgents());
-      setError(null);
-      setDegraded(true);
-      setDegradedMsg(`Unexpected API failure (${message}). Showing clearly marked demo office.`);
+      showDemoOffice(`Unexpected API failure (${message})`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showDemoOffice]);
 
   useEffect(() => {
     fetchData();
@@ -181,112 +225,98 @@ export default function App(): React.ReactElement {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // States
   if (loading) return <LoadingView />;
   if (error) return <ErrorView message={error} />;
   if (!agents || agents.length === 0) return <EmptyView />;
-
-  // Group agents by status for zone placement
-  const groups = {
-    working: agents.filter((a) => a.status === "working"),
-    reviewing: agents.filter((a) => a.status === "reviewing"),
-    idle: agents.filter((a) => a.status === "idle"),
-    blocked: agents.filter((a) => a.status === "blocked"),
-  };
 
   return (
     <div className="ao-office">
       {degraded && <DegradedBanner message={degradedMsg} />}
 
-      {/* Top header bar */}
       <header className="ao-header">
-        <h1 className="ao-title">🏢 Agent Office</h1>
+        <div>
+          <h1 className="ao-title">🏢 Agent Office</h1>
+          <p className="ao-subtitle">
+            Kanban lifecycle → worker position → office animation
+          </p>
+        </div>
         <p className="ao-subtitle">
           {agents.length} agent{agents.length !== 1 ? "s" : ""} · polling every {POLL_INTERVAL_MS / 1000}s
         </p>
       </header>
 
-      {/* Office floor */}
-      <div className="ao-floor">
-        {/* Floor plan background */}
-        <div className="ao-floor-wall">
-          {/* Window decorations */}
+      <main className="ao-floor">
+        <section className="ao-map-stage" aria-label="Animated office floor plan">
+          <div className="ao-room ao-room--work">
+            <span className="ao-room-label">Work room</span>
+          </div>
+          <div className="ao-room ao-room--review">
+            <span className="ao-room-label">Review / Test</span>
+          </div>
+          <div className="ao-room ao-room--help">
+            <span className="ao-room-label">Blocked / Help</span>
+          </div>
+          <div className="ao-room ao-room--lounge">
+            <span className="ao-room-label">Lounge</span>
+          </div>
+
           <div className="ao-window ao-window--left" />
           <div className="ao-window ao-window--right" />
+          <div className="ao-door ao-door--main" />
 
-          {/* Zone: Desks */}
-          <div
-            className="ao-zone ao-zone--desks"
-          >
-            <div className="ao-zone-label">🖥 Desks</div>
-            <div className="ao-desks-grid">
-              {groups.working.map((agent, i) => (
-                <WorkerAvatar
-                  key={agent.profile.name}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent)}
-                />
-              ))}
-              {groups.working.length === 0 && (
-                <span className="ao-zone-empty">No one working</span>
-              )}
-            </div>
+          <div className="ao-desk ao-desk--frontend">
+            <span className="ao-monitor ao-monitor--active" />
+            <span className="ao-chair" />
+            <span className="ao-furniture-label">Frontend desk</span>
+          </div>
+          <div className="ao-desk ao-desk--backend">
+            <span className="ao-monitor" />
+            <span className="ao-chair" />
+            <span className="ao-furniture-label">Backend desk</span>
+          </div>
+          <div className="ao-desk ao-desk--review-desk">
+            <span className="ao-monitor ao-monitor--review" />
+            <span className="ao-chair" />
+            <span className="ao-furniture-label">Review desk</span>
           </div>
 
-          {/* Zone: Review / Test */}
-          <div className="ao-zone ao-zone--review">
-            <ReviewDesk />
-            <div className="ao-review-workers">
-              {groups.reviewing.map((agent) => (
-                <WorkerAvatar
-                  key={agent.profile.name}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent)}
-                />
-              ))}
-              {groups.reviewing.length === 0 && (
-                <span className="ao-zone-empty" />
-              )}
-            </div>
+          <div className="ao-sofa">
+            <span className="ao-furniture-label">Sofa</span>
+          </div>
+          <div className="ao-coffee-machine">
+            <span className="ao-coffee-cup">☕</span>
+            <span className="ao-furniture-label">Coffee</span>
+          </div>
+          <div className="ao-help-board">
+            <span className="ao-help-icon">🚨</span>
+            <span className="ao-furniture-label">Help</span>
           </div>
 
-          {/* Zone: Coffee / Lounge */}
-          <div className="ao-zone ao-zone--lounge">
-            <CoffeeMachine />
-            <div className="ao-lounge-workers">
-              {groups.idle.map((agent) => (
-                <WorkerAvatar
-                  key={agent.profile.name}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent)}
-                />
-              ))}
-              {groups.idle.length === 0 && (
-                <span className="ao-zone-empty">Everyone's busy!</span>
-              )}
-            </div>
-          </div>
+          <div className="ao-path ao-path--lounge-desk" />
+          <div className="ao-path ao-path--desk-review" />
 
-          {/* Zone: Blocked / Help */}
-          <div className="ao-zone ao-zone--problem">
-            <ProblemZone />
-            <div className="ao-problem-workers">
-              {groups.blocked.map((agent) => (
-                <WorkerAvatar
-                  key={agent.profile.name}
-                  agent={agent}
-                  onClick={() => setSelectedAgent(agent)}
-                />
-              ))}
-              {groups.blocked.length === 0 && (
-                <span className="ao-zone-empty">No blocked agents</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+          {agents.map((agent) => {
+            const placement = getWorkerPlacement(agent, agents);
+            return (
+              <WorkerAvatar
+                key={agent.profile.name}
+                agent={agent}
+                placement={placement}
+                onClick={() => setSelectedAgent(agent)}
+              />
+            );
+          })}
 
-      {/* Side drawer */}
+          <div className="ao-map-legend">
+            {agents.map((agent) => (
+              <span key={agent.profile.name}>
+                <strong>{agent.profile.name}</strong>: {stateText(agent.status)}
+              </span>
+            ))}
+          </div>
+        </section>
+      </main>
+
       {selectedAgent && (
         <AgentDrawer
           agent={selectedAgent}
