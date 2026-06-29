@@ -1,11 +1,12 @@
 {
   "name": "agent-office",
   "label": "Agent Office",
+  "icon": "Building",
+  "version": "0.1.0",
   "entry": "dist/index.js",
   "description": "Gamified Hermes dashboard office view for profiles and kanban activity",
   "tab": {
     "path": "/agent-office",
-    "icon": "building",
-    "position": "main"
+    "position": "after:kanban"
   }
 }
