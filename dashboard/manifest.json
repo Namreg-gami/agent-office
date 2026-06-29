@@ -1,0 +1,6 @@
+{
+  "name": "agent-office",
+  "label": "Agent Office",
+  "entry": "dashboard/dist/index.js",
+  "description": "Gamified Hermes dashboard office view for profiles and kanban activity"
+}

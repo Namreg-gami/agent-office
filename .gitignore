@@ -1,0 +1,6 @@
+node_modules/
+dashboard/dist/
+.worktrees/
+.env
+*.log
+.DS_Store
