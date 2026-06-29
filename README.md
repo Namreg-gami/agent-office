@@ -1,45 +1,68 @@
 # Agent Office
 
-Геймифицированный **плагин для Hermes-дашборда**: офис, где профили Hermes —
-человечки за столами с живым статусом «кто что делает». Клик по человечку → активность
-и рассуждения этого агента.
+Отдельное локальное web-приложение для демо Hermes Kanban + Profiles как визуального офиса.
 
-Это **демо-проект для видео** (NAMREG, «AI Agents на практике», part 2). Цель —
-показать, как одну и ту же задачу строят на трёх уровнях оркестрации:
+## Идея
 
-1. **Subagents** (`delegate_task`)
-2. **Profiles** (`hermes profile`)
-3. **Kanban + Profiles** (`hermes kanban`)
+Agent Office должен выглядеть как офис, где каждый Hermes profile — отдельный сотрудник:
 
-> Код пишут сами агенты на камеру. Этот репозиторий — только «стройплощадка»:
-> спека ([spec.md](spec.md)), критерии ревью ([review.md](review.md)) и скелет плагина.
+- frontend сидит за своим столом и делает frontend-задачи;
+- backend сидит за backend/API-столом;
+- reviewer/tester проверяет задачи в review/test зоне;
+- idle worker отдыхает у кофемашины/lounge;
+- blocked worker подсвечен и находится в problem/help зоне.
 
-## Параллельная работа в git-ветках (worktree)
+Это **не просто карточки профилей** и не финальная «страница внутри Hermes dashboard». Dashboard/API можно использовать как источник данных, но основной UX — standalone office app.
 
-Чтобы воркеры пилили проект **параллельно без конфликтов**, используем воркспейс
-`worktree`: на каждую задачу Hermes создаёт git-worktree в `.worktrees/<id>/` — своя
-ветка под задачу. Поэтому репо уже инициализирован и имеет initial commit (worktree
-ответвляется от существующего репозитория).
+## Для чего проект
 
-- **Kanban (способ 3):** в задаче ставим workspace `worktree` — ветки раздаются сами.
-- **Profiles (способ 2):** каждому профилю даём свою ветку/worktree вручную
-  (через `terminal.cwd` или `git worktree add`).
+Это демо-проект для видео NAMREG про AI Agents на практике:
+
+1. Как Hermes Profiles работают как разные сотрудники.
+2. Как Kanban диспетчеризует задачи между профилями.
+3. Как reviewer проверяет работу.
+4. Как всё это можно визуализировать как офисную сцену.
 
 ## Структура
 
-```
+```text
 agent-office/
-├── spec.md             # ЧТО строить (бриф для агентов)
-├── review.md           # критерии проверки (для reviewer-профиля)
-└── dashboard/
-    ├── manifest.json   # манифест плагина (скелет — сверять с актуальным примером)
-    └── src/            # сюда агенты пишут React-исходники
+├── app/                    # standalone local web app — основное приложение
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── index.html
+│   └── src/
+├── dashboard/              # старый plugin/prototype; не финальный UX
+├── spec.md                 # актуальный бриф
+├── review.md               # критерии проверки
+└── README.md
 ```
 
-Сборка даёт `dashboard/dist/index.js` (IIFE-бандл), который кладётся в
-`~/.hermes/plugins/agent-office/dashboard/` и появляется вкладкой в дашборде.
+## Источники данных
 
-## Ссылки
+Приложение может использовать Hermes dashboard/API:
 
-- Доку по плагинам: https://hermes-agent.nousresearch.com/docs/user-guide/features/extending-the-dashboard
-- Официальный пример: https://github.com/NousResearch/hermes-example-plugins/tree/main/example-dashboard
+- profiles: `/api/profiles`;
+- kanban board: `/api/plugins/kanban/board`;
+- task detail: `/api/plugins/kanban/tasks/{id}`;
+- status: `/api/status`.
+
+В dev mode Vite может проксировать `/api` на локальный Hermes dashboard:
+
+```ts
+server: {
+  proxy: {
+    "/api": "http://127.0.0.1:9119"
+  }
+}
+```
+
+## Проверка
+
+```bash
+npm --prefix app install
+npm --prefix app run build
+npm --prefix app run dev -- --host 127.0.0.1
+```
+
+Ожидаемый результат: браузер открывает отдельное приложение с визуальным офисом, где профили отображаются как сотрудники в разных зонах офиса в зависимости от текущего Kanban-статуса.
