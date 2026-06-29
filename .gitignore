@@ -1,6 +1,11 @@
 node_modules/
 dashboard/dist/
+app/dist/
 .worktrees/
 .env
 *.log
 .DS_Store
+__pycache__/
+*.pyc
+*.pyo
+server/.venv/
