@@ -14,23 +14,39 @@ export interface WorkerPlacement {
   label: string;
 }
 
-type Role = "frontend" | "backend" | "reviewer" | "default";
+type Role = "frontend" | "backend" | "reviewer" | "social" | "default";
 
 export const OFFICE_POINTS = {
   desks: {
-    frontend: { x: 22, y: 34 },
-    backend: { x: 43, y: 34 },
-    reviewer: { x: 64, y: 31 },
-    default: { x: 31, y: 34 },
+    // Coordinates are intentionally placed on/near furniture, not in a generic room cluster.
+    frontend: { x: 21, y: 30 },
+    backend: { x: 42, y: 30 },
+    reviewer: { x: 72, y: 29 },
+    social: { x: 30, y: 45 },
+    default: { x: 12, y: 44 },
   },
   lounge: {
-    frontend: { x: 73, y: 73 },
-    backend: { x: 82, y: 74 },
-    reviewer: { x: 78, y: 84 },
-    default: { x: 78, y: 78 },
+    // Spread resting workers across sofa/coffee instead of stacking them on one point.
+    frontend: { x: 62, y: 73 },
+    backend: { x: 84, y: 69 },
+    reviewer: { x: 82, y: 84 },
+    social: { x: 70, y: 84 },
+    default: { x: 57, y: 84 },
   },
-  review: { x: 72, y: 31 },
-  help: { x: 28, y: 76 },
+  review: {
+    frontend: { x: 66, y: 36 },
+    backend: { x: 74, y: 36 },
+    reviewer: { x: 72, y: 29 },
+    social: { x: 82, y: 36 },
+    default: { x: 64, y: 29 },
+  },
+  help: {
+    frontend: { x: 20, y: 73 },
+    backend: { x: 28, y: 73 },
+    reviewer: { x: 34, y: 81 },
+    social: { x: 17, y: 82 },
+    default: { x: 28, y: 82 },
+  },
 } as const;
 
 const STATUS_PRECEDENCE = [
@@ -51,6 +67,7 @@ function roleForProfile(profileName: string): Role {
   if (lower.includes("front")) return "frontend";
   if (lower.includes("back")) return "backend";
   if (lower.includes("review") || lower.includes("test")) return "reviewer";
+  if (lower.includes("social") || lower.includes("bariot")) return "social";
   return "default";
 }
 
@@ -105,9 +122,9 @@ function basePointForAgent(agent: AgentState): WorkerPlacement {
       };
     case "walking_to_review":
     case "reviewing":
-      return { point: OFFICE_POINTS.review, zone: "review", label: "Review / Test" };
+      return { point: OFFICE_POINTS.review[role], zone: "review", label: "Review / Test" };
     case "blocked":
-      return { point: OFFICE_POINTS.help, zone: "help", label: "Blocked / Help" };
+      return { point: OFFICE_POINTS.help[role], zone: "help", label: "Blocked / Help" };
     case "walking_to_lounge":
     case "idle":
     default:
