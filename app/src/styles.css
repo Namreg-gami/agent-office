@@ -465,3 +465,138 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* =============================================
+   Drawer Tabs
+   ============================================= */
+.ao-drawer-tabs {
+  display: flex;
+  border-bottom: 2px solid #e8dcc8;
+}
+.ao-drawer-tab {
+  flex: 1;
+  padding: 0.6rem 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #8b7355;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ao-drawer-tab:hover {
+  color: #4a3728;
+}
+.ao-drawer-tab--active {
+  color: #4a3728;
+  border-bottom-color: #8b7355;
+}
+
+/* =============================================
+   Usage Tab Styles
+   ============================================= */
+.ao-usage-key-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.ao-usage-key-label {
+  font-size: 0.85rem;
+  font-family: monospace;
+  font-weight: 700;
+  color: #3d3529;
+}
+.ao-usage-key-name {
+  font-size: 0.72rem;
+  color: #8b7355;
+  font-style: italic;
+}
+
+.ao-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.ao-usage-card {
+  text-align: center;
+  background: #faf5eb;
+  border-radius: 8px;
+  padding: 0.6rem 0.3rem;
+  border: 1px solid #e8dcc8;
+}
+.ao-usage-card-value {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #3d3529;
+}
+.ao-usage-card-label {
+  display: block;
+  font-size: 0.6rem;
+  color: #8b7355;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.15rem;
+}
+
+.ao-usage-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ao-usage-bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #6b5e4f;
+}
+.ao-usage-bar {
+  height: 10px;
+  background: #e8dcc8;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ao-usage-bar-fill {
+  height: 100%;
+  background: #8b7355;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.ao-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.ao-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  background: #faf5eb;
+}
+.ao-activity-model {
+  font-weight: 700;
+  color: #3d3529;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ao-activity-tokens {
+  color: #6b5e4f;
+  font-variant-numeric: tabular-nums;
+}
+.ao-activity-cost {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #3d3529;
+  min-width: 4rem;
+  text-align: right;
+}

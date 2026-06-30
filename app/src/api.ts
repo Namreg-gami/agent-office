@@ -7,6 +7,7 @@ import type {
   TaskDetail,
   AgentState,
   AgentStatus,
+  WorkerUsageResponse,
 } from "./types";
 
 const API_BASE = "";
@@ -55,6 +56,14 @@ export function fetchWorkerDetail(profile: string): Promise<WorkerDetailResponse
 
 export function fetchTaskDetailApi(taskId: string): Promise<TaskDetail> {
   return fetchJSON<TaskDetail>(`/api/office/tasks/${taskId}`);
+}
+
+export function fetchWorkerUsage(
+  profile: string
+): Promise<WorkerUsageResponse> {
+  return fetchJSON<WorkerUsageResponse>(
+    `/api/office/workers/${profile}/usage`
+  );
 }
 
 export function officeStateToAgentStates(resp: OfficeStateResponse): AgentState[] {

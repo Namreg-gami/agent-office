@@ -5,11 +5,14 @@ and exposes clean JSON for the standalone visual office frontend.
 
 import json
 import os
+import pathlib
+import re
 import subprocess
 import time
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -179,6 +182,197 @@ def _column_for_status(status: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# OpenRouter usage helpers
+# ---------------------------------------------------------------------------
+
+# Regex to detect OpenRouter key prefix (sk-or-...) for masking
+_OR_KEY_RE = re.compile(r"^sk-or-", re.IGNORECASE)
+
+
+def _read_profile_env(profile: str) -> dict[str, str]:
+    """Read OPENROUTER_API_KEY from a profile's or default .env file.
+
+    Priority:
+      1. ~/.hermes/profiles/{profile}/.env
+      2. ~/.hermes/.env (fallback)
+    Returns dict with at least 'key' (str or None).
+    """
+    env_vars: dict[str, str] = {}
+
+    def _load_env(path: pathlib.Path) -> None:
+        if not path.is_file():
+            return
+        try:
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip()
+                v = v.strip().strip("\"'")
+                if k not in env_vars:
+                    env_vars[k] = v
+        except (OSError, PermissionError):
+            pass
+
+    hermes_home = pathlib.Path.home() / ".hermes"
+    _load_env(hermes_home / "profiles" / profile / ".env")
+    if "OPENROUTER_API_KEY" not in env_vars:
+        _load_env(hermes_home / ".env")
+
+    return env_vars
+
+
+def _mask_key(key: str) -> str:
+    """Return a safe identifier for an OpenRouter API key.
+
+    Shows last 4 chars if it matches the OpenRouter pattern,
+    otherwise shows 'sk-...xxxx'.
+    """
+    if len(key) <= 8:
+        return "sk-..." + key[-4:]
+    if _OR_KEY_RE.match(key):
+        return key[:5] + "..." + key[-4:]
+    # Generic: show first 3 + last 4
+    return key[:3] + "..." + key[-4:]
+
+
+def _normalize_activity_item(item: Any) -> dict[str, Any]:
+    """Normalize OpenRouter activity rows to the frontend contract.
+
+    The activity API returns aggregated rows with prompt_tokens,
+    completion_tokens, reasoning_tokens and usage. The frontend expects
+    tokens/cost plus optional details.
+    """
+    if not isinstance(item, dict):
+        return {"model": "unknown", "tokens": 0, "cost": 0.0}
+
+    prompt = int(item.get("prompt_tokens") or 0)
+    completion = int(item.get("completion_tokens") or 0)
+    reasoning = int(item.get("reasoning_tokens") or 0)
+    tokens = prompt + completion
+
+    return {
+        "created_at": item.get("created_at") or item.get("date"),
+        "model": item.get("model") or item.get("model_permaslug") or "unknown",
+        "provider": item.get("provider_name") or item.get("provider"),
+        "tokens": tokens,
+        "cost": float(item.get("usage") or item.get("cost") or 0.0),
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "reasoning_tokens": reasoning,
+        "requests": item.get("requests"),
+    }
+
+
+async def _fetch_openrouter_usage(key: str) -> dict[str, Any]:
+    """Fetch usage data from OpenRouter API using the given key.
+
+    Calls GET /api/v1/key and optionally GET /api/v1/activity.
+    Returns a normalized dict — never includes the raw API key.
+    """
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+    }
+
+    result: dict[str, Any] = {
+        "provider": "openrouter",
+        "configured": True,
+        "key_label": _mask_key(key),
+        "usage": 0.0,
+        "usage_daily": None,
+        "usage_weekly": None,
+        "usage_monthly": 0.0,
+        "limit": None,
+        "remaining": None,
+        "limit_reset": None,
+        "activity_available": False,
+        "error": None,
+    }
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
+        # Step 1: fetch key info (usage / limits)
+        try:
+            resp = await client.get(
+                "https://openrouter.ai/api/v1/key",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                key_data = data.get("data", data)
+                # Do not forward OpenRouter label/name/id verbatim. Users sometimes
+                # label keys with secret-like values, and /key may return labels
+                # derived from the key. Keep only our deterministic masked key.
+                result["key_id"] = result["key_label"]
+                result["key_name"] = None
+
+                _usage = key_data.get("usage", 0.0)
+                result["usage"] = float(_usage) if _usage else 0.0
+
+                _limit = key_data.get("limit")
+                result["limit"] = float(_limit) if _limit else None
+
+                _remaining = key_data.get("remaining")
+                result["remaining"] = float(_remaining) if _remaining else None
+
+                result["limit_reset"] = key_data.get("limit_reset")
+
+                # If 'usage' represents total and limit is total,
+                # remaining can be computed if not present
+                if result["remaining"] is None and result["limit"] is not None:
+                    result["remaining"] = max(0.0, result["limit"] - result["usage"])
+
+                # Check for daily/monthly breakdowns
+                result["usage_daily"] = key_data.get("usage_daily") or key_data.get("daily_usage")
+                if result["usage_daily"] is not None:
+                    result["usage_daily"] = float(result["usage_daily"])
+                result["usage_weekly"] = key_data.get("usage_weekly") or key_data.get("weekly_usage")
+                if result["usage_weekly"] is not None:
+                    result["usage_weekly"] = float(result["usage_weekly"])
+                result["usage_monthly"] = key_data.get("usage_monthly") or key_data.get("monthly_usage") or result["usage"]
+                if result["usage_monthly"] is not None:
+                    result["usage_monthly"] = float(result["usage_monthly"])
+            elif resp.status_code in (401, 403):
+                result["configured"] = False
+                result["error"] = "Invalid or expired API key"
+                return result
+            else:
+                result["error"] = f"OpenRouter returned HTTP {resp.status_code}"
+                return result
+        except httpx.TimeoutException:
+            result["error"] = "OpenRouter API timed out"
+            return result
+        except httpx.RequestError as exc:
+            result["error"] = f"Network error: {exc}"
+            return result
+
+        # Step 2: try activity endpoint (token data, optional)
+        try:
+            resp = await client.get(
+                "https://openrouter.ai/api/v1/activity",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                act_data = resp.json()
+                activity_list = act_data.get("data", act_data)
+                if isinstance(activity_list, list) and len(activity_list) > 0:
+                    result["activity"] = [_normalize_activity_item(item) for item in activity_list[:50]]
+                    result["activity_available"] = True
+                elif isinstance(activity_list, dict):
+                    # Some API versions return {data: [...]}
+                    inner = activity_list.get("data")
+                    if isinstance(inner, list) and len(inner) > 0:
+                        result["activity"] = [_normalize_activity_item(item) for item in inner[:50]]
+                        result["activity_available"] = True
+        except (httpx.TimeoutException, httpx.RequestError):
+            # Activity is optional; degrade gracefully
+            pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -294,6 +488,55 @@ def task_detail(task_id: str) -> dict[str, Any]:
     if not isinstance(detail, dict):
         raise HTTPException(status_code=503, detail="Unexpected CLI response format")
     return detail
+
+
+@app.get("/api/office/workers/{profile}/usage")
+async def worker_usage(profile: str) -> dict[str, Any]:
+    """Return OpenRouter usage / credit data for a worker profile.
+
+    Reads OPENROUTER_API_KEY from the profile's .env (or defaults to
+    ~/.hermes/.env), calls the OpenRouter key/activity endpoints, and
+    returns a normalized response without secrets.
+    """
+    env_vars = _read_profile_env(profile)
+    or_key = env_vars.get("OPENROUTER_API_KEY")
+
+    if not or_key:
+        return {
+            "profile": profile,
+            "provider": "openrouter",
+            "configured": False,
+            "error": "No OPENROUTER_API_KEY found in profile or default .env",
+            "usage": 0.0,
+            "usage_daily": None,
+            "usage_weekly": None,
+            "usage_monthly": 0.0,
+            "limit": None,
+            "remaining": None,
+            "limit_reset": None,
+            "activity_available": False,
+        }
+
+    try:
+        data = await _fetch_openrouter_usage(or_key)
+    except Exception as exc:
+        data = {
+            "provider": "openrouter",
+            "configured": True,
+            "key_label": _mask_key(or_key),
+            "error": f"Unexpected error: {exc}",
+            "usage": 0.0,
+            "usage_daily": None,
+            "usage_weekly": None,
+            "usage_monthly": 0.0,
+            "limit": None,
+            "remaining": None,
+            "limit_reset": None,
+            "activity_available": False,
+        }
+
+    data["profile"] = profile
+    return data
 
 
 # ---------------------------------------------------------------------------

@@ -137,3 +137,51 @@ export interface AgentState {
 export interface ProfilesResponse {
   profiles: ProfileInfo[];
 }
+
+// ── OpenRouter usage ─────────────────────────────────────────────────────
+
+export interface UsageActivity {
+  /** Unix timestamp of the request */
+  created_at?: number;
+  /** Model slug used */
+  model?: string;
+  /** Provider slug */
+  provider?: string;
+  /** Number of tokens */
+  tokens?: number;
+  /** Cost in USD */
+  cost?: number;
+  /** Prompt tokens */
+  prompt_tokens?: number;
+  /** Completion tokens */
+  completion_tokens?: number;
+}
+
+export interface WorkerUsageResponse {
+  profile: string;
+  provider: "openrouter";
+  configured: boolean;
+  key_label?: string;
+  key_id?: string | null;
+  key_name?: string | null;
+  /** Total usage in USD */
+  usage: number;
+  /** Daily usage in USD */
+  usage_daily: number | null;
+  /** Weekly usage in USD */
+  usage_weekly: number | null;
+  /** Monthly usage in USD */
+  usage_monthly: number;
+  /** Credit limit in USD */
+  limit: number | null;
+  /** Remaining credits in USD */
+  remaining: number | null;
+  /** ISO timestamp or null */
+  limit_reset: string | null;
+  /** Whether token-level activity is available */
+  activity_available: boolean;
+  /** Token-level activity entries (capped at 50) */
+  activity?: UsageActivity[];
+  /** Error message if the request failed */
+  error: string | null;
+}
