@@ -24,13 +24,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_ANIMATIONS: Record<string, string> = {
-  idle: "ao-avatar--idle",
-  walking_to_desk: "ao-avatar--walking",
-  working_at_desk: "ao-avatar--typing",
-  walking_to_review: "ao-avatar--walking",
-  reviewing: "ao-avatar--reviewing",
-  walking_to_lounge: "ao-avatar--walking ao-avatar--coffee-bound",
-  blocked: "ao-avatar--blocked",
+  idle: "ao-sprite--idle",
+  walking_to_desk: "ao-sprite--walking",
+  working_at_desk: "ao-sprite--typing",
+  walking_to_review: "ao-sprite--walking",
+  reviewing: "ao-sprite--reviewing",
+  walking_to_lounge: "ao-sprite--walking",
+  blocked: "ao-sprite--blocked",
 };
 
 interface Props {
@@ -56,7 +56,7 @@ export default function WorkerAvatar({
 
   return (
     <button
-      className={`ao-avatar ao-map-worker ${animClass}`}
+      className={`ao-map-worker ${animClass}`}
       style={style}
       onClick={onClick}
       title={`${profile.name} — ${STATUS_LABELS[status] || status} @ ${placement.label}`}
@@ -65,7 +65,18 @@ export default function WorkerAvatar({
       data-moving={isMovingState(status) ? "true" : "false"}
     >
       <span className="ao-avatar-shadow" />
-      <span className="ao-avatar-inner">{initials}</span>
+
+      {/* CSS-only pixel sprite: head, body, arms, legs */}
+      <span className="ao-sprite" aria-hidden="true">
+        <span className="ao-sprite-head" />
+        <span className="ao-sprite-body" />
+        <span className="ao-sprite-arm ao-sprite-arm--left" />
+        <span className="ao-sprite-arm ao-sprite-arm--right" />
+        <span className="ao-sprite-leg ao-sprite-leg--left" />
+        <span className="ao-sprite-leg ao-sprite-leg--right" />
+        <span className="ao-sprite-badge">{initials}</span>
+      </span>
+
       <span className="ao-status-dot" style={{ backgroundColor: color }} />
       <span className="ao-avatar-name">{profile.name}</span>
       <span className="ao-avatar-status" style={{ color }}>

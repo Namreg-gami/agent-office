@@ -223,7 +223,7 @@ body {
 @keyframes ao-steam { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes ao-alert-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.12); opacity: .65; } }
 
-/* Worker avatars are absolutely positioned by map coordinates. */
+/* ── Worker avatars positioned by map coordinates ────────────────────── */
 .ao-map-worker {
   position: absolute;
   left: var(--worker-x);
@@ -247,44 +247,104 @@ body {
   filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));
 }
 .ao-map-worker:focus-visible { outline: 3px solid #8b7355; outline-offset: 4px; border-radius: 12px; }
+
+/* floor shadow under the sprite */
 .ao-avatar-shadow {
   position: absolute;
-  top: 41px;
-  width: 36px;
-  height: 10px;
+  top: 44px;
+  width: 28px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(0,0,0,.18);
-  filter: blur(2px);
+  background: rgba(0,0,0,.16);
+  filter: blur(3px);
 }
-.ao-avatar-inner {
-  width: 42px;
-  height: 42px;
+
+/* ── CSS-only pixel sprite (person) ──────────────────────────────────── */
+.ao-sprite {
+  position: relative;
+  width: 40px;
+  height: 52px;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+/* head — neutral skin tone */
+.ao-sprite-head {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #fff8e8;
-  border: 4px solid var(--worker-color, #8b7355);
+  background: #fdd9b5;
+  border: 1.5px solid #c4956a;
+}
+
+/* torso / body — worker color */
+.ao-sprite-body {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px 5px 4px 4px;
+  background: var(--worker-color, #8b7355);
+  border: 1.5px solid rgba(0,0,0,.15);
+}
+
+/* arms — thin rectangles on body sides */
+.ao-sprite-arm {
+  position: absolute;
+  top: 12px;
+  width: 5px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--worker-color, #8b7355);
+  border: 1.5px solid rgba(0,0,0,.12);
+  transform-origin: top center;
+}
+.ao-sprite-arm--left  { left: 6px; }
+.ao-sprite-arm--right { right: 6px; }
+
+/* legs — two narrow rectangles below body */
+.ao-sprite-leg {
+  position: absolute;
+  top: 28px;
+  width: 6px;
+  height: 14px;
+  border-radius: 3px;
+  background: #5b4630;
+  border: 1px solid rgba(0,0,0,.18);
+  transform-origin: top center;
+}
+.ao-sprite-leg--left  { left: 12px; }
+.ao-sprite-leg--right { right: 12px; }
+
+/* initials badge — small tag on the body */
+.ao-sprite-badge {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 14px;
+  background: rgba(255, 248, 232, .92);
+  border: 1px solid rgba(139,115,85,.35);
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.92rem;
+  font-size: 0.48rem;
   font-weight: 900;
   color: #4a3728;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 0 rgba(74, 55, 40, 0.18);
-  position: relative;
-  z-index: 2;
+  letter-spacing: 0.4px;
+  line-height: 1;
 }
-.ao-status-dot {
-  position: absolute;
-  top: 31px;
-  right: 9px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid #f5f0e8;
-  box-shadow: 0 0 4px rgba(0,0,0,0.25);
-  z-index: 3;
-}
-.ao-avatar-name, .ao-avatar-status {
+
+/* status dot — hidden for sprites; status is conveyed by limb animation */
+.ao-status-dot { display: none; }
+
+.ao-avatar-name {
   position: relative;
   z-index: 2;
   max-width: 64px;
@@ -294,55 +354,101 @@ body {
   background: rgba(255, 248, 232, .9);
   border-radius: 999px;
   padding: 0.03rem 0.28rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  color: #4a3728;
 }
-.ao-avatar-name { font-size: 0.56rem; font-weight: 800; color: #4a3728; }
 .ao-avatar-status { display: none; }
 
-.ao-avatar--walking .ao-avatar-inner { animation: ao-walk-bob .42s ease-in-out infinite alternate; }
-.ao-avatar--typing .ao-avatar-inner::after {
-  content: "⌨";
-  position: absolute;
-  right: -18px;
-  top: 2px;
-  font-size: 1rem;
-  animation: ao-typing 1.1s ease-in-out infinite;
+/* ── Status-driven sprite animations ─────────────────────────────────── */
+
+/* IDLE / LOUNGE: gentle breathing + coffee sip motion */
+.ao-sprite--idle .ao-sprite-body { animation: ao-breathe 2.4s ease-in-out infinite; }
+.ao-sprite--idle .ao-sprite-arm--right {
+  animation: ao-sip 2.4s ease-in-out infinite;
 }
-.ao-avatar--idle .ao-avatar-inner::after {
-  content: "☕";
-  position: absolute;
-  right: -16px;
-  top: 1px;
-  font-size: 1rem;
-  animation: ao-steam 2s ease-in-out infinite;
+
+@keyframes ao-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.06); }
 }
-.ao-avatar--reviewing .ao-avatar-inner::after {
-  content: "🔍";
-  position: absolute;
-  right: -20px;
-  top: 0;
-  font-size: 1rem;
-  animation: ao-review-bounce 1.3s ease-in-out infinite;
+@keyframes ao-sip {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-35deg); }
+  60% { transform: rotate(-35deg); }
 }
-.ao-avatar--blocked .ao-avatar-inner { animation: ao-blocked-shake .55s ease-in-out infinite; }
-.ao-avatar--blocked .ao-avatar-inner::after {
-  content: "!";
-  position: absolute;
-  right: -11px;
-  top: -8px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #ef4444;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
+
+/* WALKING: legs swing alternately, body bobs up/down */
+.ao-sprite--walking .ao-sprite-body { animation: ao-walk-bob-sprite 0.44s ease-in-out infinite alternate; }
+.ao-sprite--walking .ao-sprite-leg--left  { animation: ao-leg-swing 0.44s ease-in-out infinite alternate; }
+.ao-sprite--walking .ao-sprite-leg--right { animation: ao-leg-swing 0.44s ease-in-out infinite alternate-reverse; }
+.ao-sprite--walking .ao-sprite-arm--left  { animation: ao-arm-swing 0.44s ease-in-out infinite alternate-reverse; }
+.ao-sprite--walking .ao-sprite-arm--right { animation: ao-arm-swing 0.44s ease-in-out infinite alternate; }
+
+@keyframes ao-walk-bob-sprite {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-3px); }
 }
-@keyframes ao-walk-bob { from { translate: 0 0; } to { translate: 0 -8px; } }
-@keyframes ao-typing { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-2px) scale(1.08); } }
-@keyframes ao-review-bounce { 0%,100% { transform: rotate(-8deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
-@keyframes ao-blocked-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+@keyframes ao-leg-swing {
+  from { transform: rotate(12deg); }
+  to   { transform: rotate(-12deg); }
+}
+@keyframes ao-arm-swing {
+  from { transform: rotate(-10deg); }
+  to   { transform: rotate(10deg); }
+}
+
+/* TYPING / WORKING: arms move up/down in quick typing rhythm */
+.ao-sprite--typing .ao-sprite-arm--left  { animation: ao-type-left 0.28s ease-in-out infinite alternate; }
+.ao-sprite--typing .ao-sprite-arm--right { animation: ao-type-right 0.28s ease-in-out infinite alternate-reverse; }
+.ao-sprite--typing .ao-sprite-body { animation: ao-type-body 0.56s ease-in-out infinite; }
+
+@keyframes ao-type-left {
+  from { transform: rotate(0deg) translateY(0); }
+  to   { transform: rotate(5deg) translateY(-3px); }
+}
+@keyframes ao-type-right {
+  from { transform: rotate(0deg) translateY(-3px); }
+  to   { transform: rotate(-5deg) translateY(0); }
+}
+@keyframes ao-type-body {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+/* REVIEWING: one arm up as if holding a magnifying glass, body leans */
+.ao-sprite--reviewing .ao-sprite-arm--right { animation: ao-review-arm 1.0s ease-in-out infinite; }
+.ao-sprite--reviewing .ao-sprite-body { animation: ao-review-lean 1.0s ease-in-out infinite; }
+.ao-sprite--reviewing .ao-sprite-head { animation: ao-review-head 1.0s ease-in-out infinite; }
+
+@keyframes ao-review-arm {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-50deg) translateY(-4px); }
+}
+@keyframes ao-review-lean {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+@keyframes ao-review-head {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(2px) rotate(5deg); }
+}
+
+/* BLOCKED: shake + one raised hand */
+.ao-sprite--blocked .ao-sprite { animation: ao-shake-sprite 0.45s ease-in-out infinite; }
+.ao-sprite--blocked .ao-sprite-arm--right { animation: ao-raise-hand 0.45s ease-in-out infinite; }
+
+@keyframes ao-shake-sprite {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  40% { transform: translateX(2px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes ao-raise-hand {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-70deg) translateY(-3px); }
+}
 
 .ao-map-legend {
   position: absolute;
@@ -453,7 +559,16 @@ body {
   .ao-help-board { left: 18%; top: 74%; width: 20%; }
   .ao-map-worker { width: 58px; }
   .ao-map-worker:hover { transform: translate(-50%, -50%) scale(1.04); }
-  .ao-avatar-inner { width: 38px; height: 38px; font-size: 0.72rem; }
+  .ao-sprite { width: 36px; height: 48px; }
+  .ao-sprite-head { left: 12px; width: 10px; height: 10px; }
+  .ao-sprite-body { left: 10px; width: 16px; height: 16px; top: 8px; }
+  .ao-sprite-arm { top: 10px; width: 4px; height: 12px; }
+  .ao-sprite-arm--left { left: 6px; }
+  .ao-sprite-arm--right { right: 6px; }
+  .ao-sprite-leg { top: 24px; width: 5px; height: 12px; }
+  .ao-sprite-leg--left { left: 11px; }
+  .ao-sprite-leg--right { right: 11px; }
+  .ao-sprite-badge { top: 40px; width: 26px; font-size: 0.44rem; }
   .ao-drawer { width: 100vw; max-width: 100vw; }
 }
 
