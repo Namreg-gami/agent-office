@@ -226,8 +226,8 @@ body {
 /* Worker avatars are absolutely positioned by map coordinates. */
 .ao-map-worker {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: var(--worker-x);
+  top: var(--worker-y);
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -239,11 +239,11 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
-  transform: translate(calc(var(--worker-x) - 32px), calc(var(--worker-y) - 31px));
-  transition: transform 1050ms cubic-bezier(.2,.82,.25,1), filter 180ms ease;
+  transform: translate(-50%, -50%);
+  transition: left 1050ms cubic-bezier(.2,.82,.25,1), top 1050ms cubic-bezier(.2,.82,.25,1), transform 180ms ease, filter 180ms ease;
 }
 .ao-map-worker:hover {
-  transform: translate(calc(var(--worker-x) - 32px), calc(var(--worker-y) - 31px)) scale(1.06);
+  transform: translate(-50%, -50%) scale(1.06);
   filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));
 }
 .ao-map-worker:focus-visible { outline: 3px solid #8b7355; outline-offset: 4px; border-radius: 12px; }
@@ -451,8 +451,8 @@ body {
   .ao-sofa { left: 59%; top: 61%; width: 25%; }
   .ao-coffee-machine { left: 70%; top: 45%; width: 18%; }
   .ao-help-board { left: 18%; top: 74%; width: 20%; }
-  .ao-map-worker { width: 58px; transform: translate(calc(var(--worker-x) - 29px), calc(var(--worker-y) - 29px)); }
-  .ao-map-worker:hover { transform: translate(calc(var(--worker-x) - 29px), calc(var(--worker-y) - 29px)) scale(1.04); }
+  .ao-map-worker { width: 58px; }
+  .ao-map-worker:hover { transform: translate(-50%, -50%) scale(1.04); }
   .ao-avatar-inner { width: 38px; height: 38px; font-size: 0.72rem; }
   .ao-drawer { width: 100vw; max-width: 100vw; }
 }
